@@ -1,0 +1,86 @@
+name: run_gan_experiment
+title: Remote GAN Experiment Runner
+description: >
+  通过 Telegram/OpenClaw 在远程 GPU 服务器上启动、监控、总结并记录
+  EnlightenGAN / VF-Lens 实验。该 skill 是实验 runner 和 reporter，
+  默认不自动修代码。
+
+language: zh-CN
+
+triggers:
+  - 跑实验
+  - 启动训练
+  - dry run 一个实验
+  - 查看训练进度
+  - 看看最新实验结果
+  - 分析这次实验
+  - 记录实验结果
+  - 对比最近实验
+
+remote:
+  host_alias: gpu
+  host_address: 10.12.42.23
+  project_path: /home/asus/zpm/EnlightenGAN-master
+  conda_env: vf10
+
+entrypoint:
+  launcher: launch_experiment.py
+  trainer: train_vf.py
+
+capabilities:
+  - 将 Telegram 自然语言请求转换为 launch_experiment.py 参数
+  - 新实验自动生成并传入 --name
+  - 真实训练前预览参数并等待用户确认
+  - 通过 SSH 和 tmux 在远程服务器后台启动训练
+  - 读取 train_log.jsonl、experiment_meta.json 和 metrics.json
+  - 兼容旧实验产物，如 opt.txt、TensorBoard events、pth 和 val_images
+  - 汇总训练状态、指标、checkpoint 和可视化证据
+  - 维护本地 experiment_records.csv
+  - 生成 reports/YYYY-MM-DD-<experiment>.md 实验报告
+  - 默认和上一条本地实验记录进行对比
+
+critical_rules:
+  - 默认只运行、监控、总结和记录实验
+  - 失败时只汇报错误，不自动修代码
+  - 不自动安装依赖、修改环境、改参数重试或提交 commit
+  - 真实训练前必须先预览参数并等待确认
+  - 新实验和 dry-run 必须带 --name，除非用户明确要求使用 launcher 默认名
+  - git commit 只作为上下文；commit message 无意义时主要看参数、日志和上一条记录差异
+  - 默认用中文回复，命令、路径、参数名和指标保持英文
+
+inputs:
+  natural_language_request: 用户在 Telegram 或 OpenClaw 中发出的实验请求
+  optional_overrides: 临时参数，如 vf_gamma、batchSize、lambda_perceptual、niter
+  optional_experiment_name: 用户指定的实验名
+  optional_baseline: 指定用于对比的历史实验；默认使用本地上一条记录
+
+outputs:
+  launch_preview: 启动前参数预览
+  progress_summary: 训练进度摘要
+  result_summary: 实验结果摘要
+  local_csv: experiment_records.csv
+  local_report: reports/YYYY-MM-DD-<experiment>.md
+
+failure_behavior:
+  report_only: true
+  allowed_diagnostics:
+    - tail logs
+    - cat experiment_meta.json
+    - read train_log.jsonl
+    - tmux capture-pane
+    - find experiment artifacts
+    - git status --short
+  blocked_actions:
+    - edit code
+    - patch bugs
+    - install packages
+    - modify environment
+    - change parameters and retry
+    - create commits
+    - create workaround scripts
+
+local_artifacts:
+  records_csv: experiment_records.csv
+  reports_dir: reports/
+  summary_doc: WORK_SUMMARY.md
+  presentation: outputs/manual-20260604-openclaw-gan/presentations/openclaw-gan-runner/output/openclaw-remote-gan-experiment-runner.pptx
